@@ -247,6 +247,38 @@ def statistics(message):
             print("Error in /statistics:", e)
             bot.reply_to(message, "An error occurred while processing statistics.")
 
+@bot.message_handler(commands=['last_sessions'])
+def last_sessions(message):
+    try:
+        conn = sqlite3.connect('blackjack_tracker.db')
+        cursor = conn.cursor()
 
+        # Fetch the last three sessions
+        cursor.execute("SELECT * FROM sessions ORDER BY session_id DESC LIMIT 3")
+        sessions = cursor.fetchall()
+
+        response = "Last 3 Sessions:\n"
+        for session in sessions:
+            login_time = datetime.strptime(session[1], "%Y-%m-%d %H:%M:%S.%f%z").strftime("%m/%d/%Y %H:%M")
+            logoff_time = datetime.strptime(session[2], "%Y-%m-%d %H:%M:%S.%f%z").strftime("%m/%d/%Y %H:%M")
+            session_duration = session[3] * 60 
+            response += (
+                f"Login Time: {login_time}\n"
+                f"Logoff Time: {logoff_time}\n"
+                f"Session Duration: {session_duration:.2f} min\n"
+                f"Total Hands: {session[4]}\n"
+                f"Total Wins: {session[5]}\n"
+                f"Total Loss: {session[6]}\n"
+                f"Highest Win: ${session[7]}\n"
+                f"Highest Loss: -${-session[8]}\n"
+                f"Base Bet: ${session[9]}\n"
+                f"Total Wager: ${session[10]}\n"
+                f"Net PnL: ${session[11]}\n\n"
+            )
+
+        bot.reply_to(message, response)
+    except Exception as e:
+        print("Error in /last_sessions:", e)
+        bot.reply_to(message, "An error occurred while fetching session data.")
 
 bot.polling()
