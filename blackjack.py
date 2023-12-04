@@ -24,6 +24,7 @@ def init_db():
                 highest_win REAL,
                 highest_loss REAL,
                 base_bet REAL,
+                total_wager REAL,
                 net_pnl REAL
             )
         ''')
@@ -57,6 +58,7 @@ def update_session(session_id, logoff_time, session_duration, data):
         highest_win = ?,
         highest_loss = ?,
         base_bet = ?,
+        total_wager = ?,
         net_pnl = ?
         WHERE session_id = ?
     ''', (logoff_time, session_duration, *data, session_id))
@@ -89,7 +91,7 @@ def handle_logoff(message):
     if current_session_id is None:
         bot.reply_to(message, "Please login first.")
     else:
-        bot.reply_to(message, "Please enter your session data separated by space (Total Hands, Total Wins, Total Loss, Highest Wins, Highest Loss, Base Bet, Net Cash):")
+        bot.reply_to(message, "Please enter your session data separated by space (Total Hands, Total Wins, Total Loss, Highest Wins, Highest Loss, Base Bet, Total Wagered, Net Cash):")
         global expecting_session_data
         expecting_session_data = True
 
@@ -166,6 +168,8 @@ def get_time_of_day(time_str):
     else:
         return "Night"
 
+# ... [previous parts of the script] ...
+
 @bot.message_handler(commands=['statistics'])
 def statistics(message):
     global current_session_id
@@ -176,47 +180,43 @@ def statistics(message):
             conn = sqlite3.connect('blackjack_tracker.db')
             cursor = conn.cursor()
 
-            # Remove incomplete session records
-            cursor.execute("DELETE FROM sessions WHERE logoff_time IS NULL OR session_duration IS NULL")
-            conn.commit()
-
             # Fetch complete session data
-            cursor.execute("SELECT login_time, logoff_time, total_hands, total_wins, total_losses, base_bet, net_pnl FROM sessions WHERE logoff_time IS NOT NULL")
+            cursor.execute("SELECT login_time, logoff_time, total_hands, total_wins, total_losses, base_bet, total_wager, net_pnl FROM sessions")
             sessions = cursor.fetchall()
 
             # Variables for calculations
-            total_hands, total_wins, total_losses, total_net_pnl = 0, 0, 0, 0
-            total_duration = 0
+            total_hands, total_wins, total_losses, total_net_pnl, total_wagered, total_duration = 0, 0, 0, 0, 0, 0
+            base_bet_profitability = {}
             day_wins = {day: 0 for day in calendar.day_name}
 
-            base_bet_counts = {}
             for session in sessions:
-                base_bet = session[6]  # Assuming base_bet is the seventh column
-                base_bet_counts[base_bet] = base_bet_counts.get(base_bet, 0) + 1
-
-                # Convert the login_time and logoff_time from string to datetime
-                login_time = datetime.strptime(session[0], "%Y-%m-%d %H:%M:%S.%f%z")
-                logoff_time = datetime.strptime(session[1], "%Y-%m-%d %H:%M:%S.%f%z")
-                duration = (logoff_time - login_time).total_seconds() / 3600
-                total_duration += duration
-
-                hands, wins, losses, net_pnl = session[2:6]
+                hands, wins, losses, base_bet, wagered, net_pnl = session[2:8]
                 total_hands += hands
                 total_wins += wins
                 total_losses += losses
                 total_net_pnl += net_pnl
+                total_wagered += wagered
+                base_bet_profitability[base_bet] = base_bet_profitability.get(base_bet, 0) + net_pnl
 
-                day_wins[calendar.day_name[login_time.weekday()]] += net_pnl
+                login_time, logoff_time = map(lambda x: datetime.strptime(x, "%Y-%m-%d %H:%M:%S.%f%z"), session[:2])
+                duration = (logoff_time - login_time).total_seconds() / 3600
+                total_duration += duration
+                day_wins[calendar.day_name[login_time.weekday()]] += 1
 
-            # Calculations
+            # Additional Calculations
             win_rate = (total_wins / total_hands) * 100 if total_hands else 0
             pnl_per_hand = total_net_pnl / total_hands if total_hands else 0
             pnl_per_session = total_net_pnl / len(sessions) if sessions else 0
-            best_base_bet = max(base_bet_counts, key=base_bet_counts.get)
-
             avg_session_duration = total_duration / len(sessions) if sessions else 0
+            avg_wager_per_session = total_wagered / len(sessions) if sessions else 0
+            win_loss_ratio_per_session = (total_wins - total_losses) / len(sessions) if sessions else 0
+            profitability_per_session = total_net_pnl / len(sessions) if sessions else 0
+            session_duration_vs_wager_amount = total_duration / total_wagered if total_wagered else 0
+            best_base_bet = max(base_bet_profitability, key=base_bet_profitability.get)
+            worst_base_bet = min(base_bet_profitability, key=base_bet_profitability.get)
             best_day = max(day_wins, key=day_wins.get)
-            roi = (total_net_pnl / total_hands) * 100 if total_hands else 0
+            roi_hands = (total_net_pnl / total_hands) * 100 if total_hands else 0
+            roi_wagered = (total_net_pnl / total_wagered) * 100 if total_wagered else 0
 
             # Response preparation
             response = (
@@ -224,18 +224,29 @@ def statistics(message):
                 f"Total Wins: {total_wins}\n"
                 f"Total Loss: {total_losses}\n"
                 f"Win Rate: {win_rate:.2f}%\n"
-                "------------\n"
+                f"Total Wagered: {total_wagered}\n"
+                "--------------------------------------\n"
                 f"PnL per hand: {pnl_per_hand:.2f}\n"
                 f"PnL per session: {pnl_per_session:.2f}\n"
                 f"Best Base Bet: {best_base_bet}\n"
-                f"Average Session Duration: {avg_session_duration:.2f} hours\n"
+                f"Worst Base Bet: {worst_base_bet}\n"
                 f"Best Day: {best_day}\n"
-                f"Return on Investment: {roi:.2f}%\n"
+                "--------------------------------------\n"
+                f"Avg Session: {avg_session_duration:.2f} hours\n"
+                f"Avg Wager per session: {avg_wager_per_session:.2f}\n"
+                f"Win Rate per session: {win_loss_ratio_per_session:.2f}\n"
+                f"Profitability per session: {profitability_per_session:.2f}\n"
+                f"Session Duration v Wager amount: {session_duration_vs_wager_amount:.2f}\n"
+                "-------------------------------------\n"
+                f"ROI (hands dealt): {roi_hands:.2f}%\n"
+                f"ROI (wager amount): {roi_wagered:.2f}%\n"
             )
 
             bot.reply_to(message, response)
         except Exception as e:
             print("Error in /statistics:", e)
             bot.reply_to(message, "An error occurred while processing statistics.")
+
+
 
 bot.polling()
