@@ -118,7 +118,7 @@ def process_session_data(message):
     if current_session_id:
         try:
             data = [int(x) if i < 3 else float(x) for i, x in enumerate(message.text.split())]
-            if len(data) != 7:
+            if len(data) != 8:
                 raise ValueError("Incorrect number of arguments")
 
             total_hands, total_wins, total_losses, base_bet = data[:4]
