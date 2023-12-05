@@ -207,7 +207,7 @@ def statistics(message):
                 f"Total Hands: {total_hands}\n"
                 f"Total Wins: {total_wins}\n"
                 f"Total Loss: {total_losses}\n"
-                f"Total PnL: {total_net_pnl}\n"
+                f"Total PnL: {round(total_net_pnl, 3)}\n"
                 f"Total Wagered: {total_wagered}\n"
                 f"Win Rate: {win_rate:.2f}%\n"
                 "--------------------------------------\n"
