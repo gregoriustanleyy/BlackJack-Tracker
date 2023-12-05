@@ -9,7 +9,6 @@ def init_db():
     conn = sqlite3.connect('blackjack_tracker.db')
     cursor = conn.cursor()
 
-    # Check if the table already exists
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='sessions'")
     if not cursor.fetchone():
         cursor.execute('''
@@ -32,7 +31,6 @@ def init_db():
     
     conn.close()
 
-# Function to insert a new session
 def insert_session():
     conn = sqlite3.connect('blackjack_tracker.db')
     cursor = conn.cursor()
@@ -44,7 +42,6 @@ def insert_session():
     return session_id
 
 
-# Function to update session data
 def update_session(session_id, logoff_time, session_duration, data):
     conn = sqlite3.connect('blackjack_tracker.db')
     cursor = conn.cursor()
@@ -65,14 +62,11 @@ def update_session(session_id, logoff_time, session_duration, data):
     conn.commit()
     conn.close()
 
-# Initialize the database
 init_db()
 
-# Bot initialization
-TOKEN = '6511079471:AAEzpHV8vvWMELNxrX8F2NMBHd1xX2lgrtE'  # Replace with your token
+TOKEN = '6511079471:AAEzpHV8vvWMELNxrX8F2NMBHd1xX2lgrtE'
 bot = telebot.TeleBot(TOKEN)
 
-# Global variable to track the current session ID
 current_session_id = None
 
 @bot.message_handler(commands=['start'])
@@ -112,7 +106,6 @@ def cancel_session(session_id):
     conn.commit()
     conn.close()
 
-# Function to process the session data input from the user
 def process_session_data(message):
     global current_session_id
     if current_session_id:
@@ -123,7 +116,6 @@ def process_session_data(message):
 
             total_hands, total_wins, total_losses, base_bet = data[:4]
 
-            # Validation: Total wins + total losses must equal total hands
             if total_wins + total_losses != total_hands:
                 raise ValueError("Total wins and losses must equal total hands")
 
@@ -140,8 +132,6 @@ def process_session_data(message):
         except ValueError as e:
             bot.reply_to(message, str(e))
 
-
-# Function to get the login time of the current session
 def get_login_time(session_id):
     conn = sqlite3.connect('blackjack_tracker.db')
     cursor = conn.cursor()
@@ -168,8 +158,6 @@ def get_time_of_day(time_str):
     else:
         return "Night"
 
-# ... [previous parts of the script] ...
-
 @bot.message_handler(commands=['statistics'])
 def statistics(message):
     global current_session_id
@@ -180,11 +168,9 @@ def statistics(message):
             conn = sqlite3.connect('blackjack_tracker.db')
             cursor = conn.cursor()
 
-            # Fetch complete session data
             cursor.execute("SELECT login_time, logoff_time, total_hands, total_wins, total_losses, base_bet, total_wager, net_pnl FROM sessions")
             sessions = cursor.fetchall()
 
-            # Variables for calculations
             total_hands, total_wins, total_losses, total_net_pnl, total_wagered, total_duration = 0, 0, 0, 0, 0, 0
             base_bet_profitability = {}
             day_wins = {day: 0 for day in calendar.day_name}
@@ -203,7 +189,6 @@ def statistics(message):
                 total_duration += duration
                 day_wins[calendar.day_name[login_time.weekday()]] += 1
 
-            # Additional Calculations
             win_rate = (total_wins / total_hands) * 100 if total_hands else 0
             pnl_per_hand = total_net_pnl / total_hands if total_hands else 0
             pnl_per_session = total_net_pnl / len(sessions) if sessions else 0
@@ -218,13 +203,13 @@ def statistics(message):
             roi_hands = (total_net_pnl / total_hands) * 100 if total_hands else 0
             roi_wagered = (total_net_pnl / total_wagered) * 100 if total_wagered else 0
 
-            # Response preparation
             response = (
                 f"Total Hands: {total_hands}\n"
                 f"Total Wins: {total_wins}\n"
                 f"Total Loss: {total_losses}\n"
-                f"Win Rate: {win_rate:.2f}%\n"
+                f"Total PnL: {total_net_pnl}\n"
                 f"Total Wagered: {total_wagered}\n"
+                f"Win Rate: {win_rate:.2f}%\n"
                 "--------------------------------------\n"
                 f"PnL per hand: {pnl_per_hand:.2f}\n"
                 f"PnL per session: {pnl_per_session:.2f}\n"
@@ -253,7 +238,6 @@ def last_sessions(message):
         conn = sqlite3.connect('blackjack_tracker.db')
         cursor = conn.cursor()
 
-        # Fetch the last three sessions
         cursor.execute("SELECT * FROM sessions ORDER BY session_id DESC LIMIT 3")
         sessions = cursor.fetchall()
 
